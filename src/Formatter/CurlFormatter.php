@@ -237,6 +237,8 @@ class CurlFormatter
         $this->extractCookiesArgument($request, $options);
         $this->extractHeadersArgument($request);
         $this->extractUrlArgument($request);
+        $this->extractDataArgument($options);
+        $this->extractFormArgument($options);
     }
 
     /**
@@ -253,5 +255,41 @@ class CurlFormatter
     {
         $process = new Process([$argument]);
         return $process->getCommandLine();
+    }
+
+    /**
+     * @param array $options
+     */
+    protected function extractFormArgument(array $options)
+    {
+        if (!isset($options['multipart'])) {
+            return;
+        }
+        $values = [];
+        foreach ($options['multipart'] as $form) {
+            $values[] = $form['name'] . '=' . $form['contents'];
+        }
+
+        foreach ($values as $value) {
+            $this->addOption('F', $this->escapeShellArgument($value));
+        }
+    }
+
+    /**
+     * @param array $options
+     */
+    protected function extractDataArgument(array $options)
+    {
+        if (!isset($options['form_params'])) {
+            return;
+        }
+        $values = [];
+        foreach ($options['form_params'] as $name => $value) {
+            $values[] = $name . '=' . $value;
+        }
+
+        foreach ($values as $value) {
+            $this->addOption('d', $this->escapeShellArgument($value));
+        }
     }
 }
