@@ -5,6 +5,8 @@ namespace Namshi\Cuzzle\Formatter;
 use GuzzleHttp\Cookie\CookieJarInterface;
 use GuzzleHttp\Cookie\SetCookie;
 use Psr\Http\Message\RequestInterface;
+use RecursiveArrayIterator;
+use RecursiveIteratorIterator;
 use Symfony\Component\Process\Process;
 
 class CurlFormatter
@@ -140,7 +142,7 @@ class CurlFormatter
 
         if ($contents) {
             // clean input of null bytes
-             $contents = str_replace(chr(0), '', $contents);
+            $contents = str_replace(chr(0), '', $contents);
             $this->addOption('d', $this->escapeShellArgument($contents));
         }
 
@@ -265,11 +267,16 @@ class CurlFormatter
         if (!isset($options['multipart'])) {
             return;
         }
-        $values = [];
-        foreach ($options['multipart'] as $form) {
-            $values[] = $form['name'] . '=' . $form['contents'];
+        $parsedArray = [];
+        foreach ($options['multipart'] as $key => $value) {
+            if (is_array($value) && array_key_exists('contents', $value) && array_key_exists('name', $value)) {
+                $parsedArray[$value['name']] = $value['contents'];
+            }
         }
-
+        $values = [];
+        foreach ($parsedArray as $key => $value) {
+            $values[] = "$key=$value";
+        }
         foreach ($values as $value) {
             $this->addOption('F', $this->escapeShellArgument($value));
         }
@@ -284,12 +291,38 @@ class CurlFormatter
             return;
         }
         $values = [];
-        foreach ($options['form_params'] as $name => $value) {
-            $values[] = $name . '=' . $value;
+        foreach ($this->parseFormdataArray($options['form_params']) as $key => $value) {
+            $values[] = "$key=$value";
         }
-
         foreach ($values as $value) {
             $this->addOption('d', $this->escapeShellArgument($value));
         }
+    }
+
+    /**
+     * Flattens multidimensional array by keys concatenation
+     *
+     * @param array $array
+     * @return array
+     */
+    public function parseFormDataArray(array $array = []) : array
+    {
+        $res = [];
+        $it = new RecursiveIteratorIterator(new RecursiveArrayIterator($array),
+            RecursiveIteratorIterator::LEAVES_ONLY);
+        $it->rewind();
+        while ($it->valid()) {
+            $value = $it->current();
+            $i = 0;
+            $sub = $it->getSubIterator($i++);
+            $keys = $sub->key();
+            while ($sub = $it->getSubIterator($i++)) {
+                $key = $sub->key();
+                $keys .= "[$key]";
+            }
+            $res[$keys] =  $value;
+            $it->next();
+        }
+        return $res;
     }
 }
